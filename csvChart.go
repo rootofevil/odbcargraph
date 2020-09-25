@@ -17,13 +17,13 @@ import (
 	"github.com/wcharczuk/go-chart"
 )
 
-//exposes "chart"
-
 var path string
 var saveto string
 var force bool
 
 var files []template.URL
+var minTime float64 = 0
+var maxTime float64 = 0
 
 type CarData struct {
 	Second float64
@@ -39,14 +39,10 @@ type CarDataSeries struct {
 	Units  string
 }
 
-type FilesLinks struct {
-	file template.URL
-}
-
 func main() {
 	flag.StringVar(&path, "p", "2020-09-21 17-09-05(1).csv", "path to file")
 	flag.StringVar(&saveto, "s", "result", "path to result")
-	flag.BoolVar(&force, "f", false, "replace files")
+	flag.BoolVar(&force, "f", true, "replace files")
 	flag.Parse()
 	savePath := saveto + "/" + strings.Split(path, ".")[0]
 	fmt.Println("Save to: ", savePath)
@@ -56,8 +52,9 @@ func main() {
 	}
 	data := readCsv(path)
 
+	fmt.Println(minTime, maxTime)
+
 	for name, values := range data {
-		// fmt.Println(name)
 		filename := savePath + "/" + strings.ReplaceAll(name, "/", "") + ".png"
 		files = append(files, template.URL(filename))
 		if _, err := os.Stat(filename); os.IsNotExist(err) || force {
@@ -114,6 +111,16 @@ func lineToData(line string) CarData {
 		data.Value = s
 	}
 	data.Units = strings.Trim(array[3], "\"")
+	if minTime == 0 {
+		minTime = data.Second
+	}
+	if data.Second < minTime {
+		minTime = data.Second
+	}
+
+	if data.Second > maxTime {
+		maxTime = data.Second
+	}
 
 	return data
 }
@@ -121,12 +128,31 @@ func lineToData(line string) CarData {
 func drawChart(name string, values CarDataSeries) *bytes.Buffer {
 
 	graph := chart.Chart{
+		Background: chart.Style{
+			Padding: chart.Box{
+				Top:   20,
+				Left:  20,
+				Right: 100,
+			},
+		},
+		XAxis: chart.XAxis{
+			Name:  "Seconds",
+			Range: &chart.ContinuousRange{Min: minTime, Max: maxTime},
+		},
+		YAxis: chart.YAxis{
+			Name: values.Units,
+		},
 		Series: []chart.Series{
 			chart.ContinuousSeries{
+				Name:    name,
 				XValues: values.Second,
 				YValues: values.Value,
 			},
 		},
+	}
+
+	graph.Elements = []chart.Renderable{
+		chart.Legend(&graph),
 	}
 
 	buffer := bytes.NewBuffer([]byte{})
