@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-echarts/go-echarts/charts"
 	"github.com/wcharczuk/go-chart"
 )
 
@@ -22,6 +23,7 @@ var saveto string
 var force bool
 
 var files []template.URL
+var page *charts.Page
 var minTime float64 = 0
 var maxTime float64 = 0
 
@@ -54,18 +56,23 @@ func main() {
 
 	fmt.Println(minTime, maxTime)
 
+	page = charts.NewPage()
+
 	for name, values := range data {
 		filename := savePath + "/" + strings.ReplaceAll(name, "/", "") + ".png"
 		files = append(files, template.URL(filename))
 		if _, err := os.Stat(filename); os.IsNotExist(err) || force {
 			fmt.Println(filename)
 			buf := drawChart(name, values)
+			line := makeEChart(name, values)
+			page.Add(line)
 			saveChart(filename, buf)
 		}
 	}
 
 	http.HandleFunc("/", httpHand)
 	http.HandleFunc("/result/", httpImage)
+	http.HandleFunc("/echarts/", httpEChartHand)
 	http.ListenAndServe(":3000", nil)
 }
 
@@ -184,6 +191,10 @@ func httpHand(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func httpEChartHand(w http.ResponseWriter, r *http.Request) {
+	page.Render(w)
+}
+
 func httpImage(w http.ResponseWriter, r *http.Request) {
 	// log.Println(r.RequestURI)
 	fp, _ := url.QueryUnescape(strings.TrimLeft(r.RequestURI, "/"))
@@ -192,4 +203,11 @@ func httpImage(w http.ResponseWriter, r *http.Request) {
 		log.Println("Can not find file")
 	}
 	http.ServeFile(w, r, fp)
+}
+
+func makeEChart(name string, values CarDataSeries) *charts.Line {
+	line := charts.NewLine()
+	line.SetGlobalOptions(charts.TitleOpts{Title: name})
+	line.AddXAxis(values.Second).AddYAxis(values.Units, values.Value)
+	return line
 }
